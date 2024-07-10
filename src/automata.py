@@ -1,125 +1,95 @@
-from typing import List, Dict
+from typing import Dict, List
 
 def load_automata(filename: str) -> tuple:
-    """
-    Lê os dados de um autômato finito a partir de um arquivo de texto e retorna uma estrutura que representa o autômato.
 
-    Args:
-        filename (str): O nome do arquivo de texto contendo a descrição do autômato.
+    try:
+        with open(filename, 'r', encoding='utf-8') as arquivo:
+            # Ler o alfabeto
+            alphabet = arquivo.readline().strip().split()
+            # Validar se o símbolo '&' está presente no alfabeto
+            if '&' not in alphabet:
+                raise ValueError("O símbolo '&' para a palavra vazia deve estar presente no alfabeto.")
 
-    Returns:
-        tuple: Uma tupla contendo os componentes do autômato:
-            - Q: Conjunto de estados
-            - Sigma: Alfabeto
-            - delta: Função de transição
-            - q0: Estado inicial
-            - F: Conjunto de estados finais
+            # Ler os estados
+            states = arquivo.readline().strip().split()
 
-    Raises:
-        Exception: Se o formato do arquivo do autômato for inválido.
-    """
+            # Ler o estado inicial
+            initial_state = arquivo.readline().strip()
+            # Validar se o estado inicial é válido
+            if initial_state not in states:
+                raise ValueError("O estado inicial não está presente na lista de estados.")
 
-    with open(filename, 'r') as arquivo:
-        # Ler o alfabeto
-        Sigma = arquivo.readline().strip().split()
-        # Validar se o símbolo '&' está presente no alfabeto
-        if '&' not in Sigma:
-            raise Exception("O símbolo '&' para a palavra vazia deve estar presente no alfabeto.")
+            # Ler os estados finais
+            final_states = arquivo.readline().strip().split()
+            # Validar se os estados finais são válidos
+            for final_state in final_states:
+                if final_state not in states:
+                    raise ValueError(f"O estado final '{final_state}' não está presente na lista de estados.")
 
-        # Ler os estados
-        Q = arquivo.readline().strip().split()
+            # Inicializar a função de transição como um dicionário
+            transitions = {}
 
-        # Ler o estado inicial
-        q0 = arquivo.readline().strip()
-        # Validar se o estado inicial é válido
-        if q0 not in Q:
-            raise Exception("O estado inicial não está presente na lista de estados.")
+            # Ler as transições
+            for linha in arquivo:
+                partes = linha.strip().split()
+                if len(partes) != 3:
+                    raise ValueError("Formato de transição inválido. Cada linha deve ter três partes: estado_origem simbolo_transicao estado_destino")
+                origin_state, transition_symbol, destination_state = partes
+                # Validar se o estado de origem e o estado de destino são válidos
+                if origin_state not in states or destination_state not in states:
+                    raise ValueError(f"Estado de origem '{origin_state}' ou estado de destino '{destination_state}' inválido.")
+                # Validar se o símbolo de transição é válido
+                if transition_symbol not in alphabet and transition_symbol != '&':
+                    raise ValueError(f"Símbolo de transição '{transition_symbol}' inválido.")
 
-        # Ler os estados finais
-        F = arquivo.readline().strip().split()
-        # Validar se os estados finais são válidos
-        for estado_final in F:
-            if estado_final not in Q:
-                raise Exception(f"O estado final '{estado_final}' não está presente na lista de estados.")
+                key = (origin_state, transition_symbol)
+                if key not in transitions:
+                    transitions[key] = []
+                transitions[key].append(destination_state)
 
-        # Inicializar a função de transição como um dicionário
-        delta = {}
+        return states, alphabet, transitions, initial_state, final_states
 
-        # Ler as transições
-        for linha in arquivo:
-            partes = linha.strip().split()
-            if len(partes) != 3:
-                raise Exception("Formato de transição inválido. Cada linha deve ter três partes: estado_origem simbolo_transicao estado_destino")
-            estado_origem, simbolo_transicao, estado_destino = partes
-            # Validar se o estado de origem e o estado de destino são válidos
-            if estado_origem not in Q or estado_destino not in Q:
-                raise Exception(f"Estado de origem '{estado_origem}' ou estado de destino '{estado_destino}' inválido.")
-            # Validar se o símbolo de transição é válido
-            if simbolo_transicao not in Sigma and simbolo_transicao != '&':
-                raise Exception(f"Símbolo de transição '{simbolo_transicao}' inválido.")
-
-            chave = (estado_origem, simbolo_transicao)
-            if chave not in delta:
-                delta[chave] = []
-            delta[chave].append(estado_destino)
-
-    return Q, Sigma, delta, q0, F
-
+    except FileNotFoundError:
+        raise FileNotFoundError(f"O arquivo '{filename}' não foi encontrado.")
+    except ValueError as e:
+        raise ValueError(f"Erro na leitura do arquivo: {e}")
 
 def process(automata, word: list[str]) -> Dict[str, str]:
-    """
-    Processa uma lista de palavras utilizando o autômato dado e retorna um mapa associando cada palavra ao resultado do autômato.
 
-    Args:
-        automata (tuple): Uma tupla contendo os componentes do autômato:
-            - Q: Conjunto de estados
-            - Sigma: Alfabeto
-            - delta: Função de transição
-            - q0: Estado inicial
-            - F: Conjunto de estados finais
-        word (List[str]): A lista de palavras a serem processadas.
+    states, alphabet, transitions, initial_state, final_states = automata
 
-    Returns:
-        Dict[str:str]: Um dicionário que mapeia cada palavra para o resultado do autômato:
-            - "ACEITA": Se a palavra é aceita pelo autômato.
-            - "REJEITA": Se a palavra é rejeitada pelo autômato.
-            - "INVALIDA": Se a palavra contém símbolos inválidos (não pertencentes ao alfabeto).
-    """
-    Q, Sigma, delta, q0, F = automata
-
-    resultados = {}
-    for palavra in word:
+    results = {}
+    for word_to_check in word:
         # Verificar se a palavra contém símbolos inválidos
-        for simbolo in palavra:
-            if simbolo not in Sigma:
-                resultados[palavra] = "INVALIDA"
+        for symbol in word_to_check:
+            if symbol not in alphabet:
+                results[word_to_check] = "INVALIDA"
                 break
         else:
             # Se a palavra for válida, simular o autômato
-            estado_atual = q0
-            for simbolo in palavra:
-                if (estado_atual, simbolo) in delta:
-                    estado_atual = delta[(estado_atual, simbolo)][0]  # Assumindo que delta é uma função determinista
+            current_state = initial_state
+            for symbol in word_to_check:
+                if (current_state, symbol) in transitions:
+                    current_state = transitions[(current_state, symbol)][0]  # Assumindo que delta é uma função determinista
                 else:
-                    resultados[palavra] = "REJEITA"
+                    results[word_to_check] = "REJEITA"
                     break
             else:
                 # Se o autômato chegou a um estado final, a palavra é aceita
-                if estado_atual in F:
-                    resultados[palavra] = "ACEITA"
+                if current_state in final_states:
+                    results[word_to_check] = "ACEITA"
                 else:
-                    resultados[palavra] = "REJEITA"
+                    results[word_to_check] = "REJEITA"
 
-    return resultados
-
+    return results
 
 # Exemplo de uso
 if __name__ == "__main__":
     try:
         automata = load_automata("automato.txt")
-        palavras = ["aba", "ab", "abb", "aa", "c"]
-        resultados = process(automata, palavras)
-        for palavra, resultado in resultados.items():
-            print(f"Palavra: {palavra}, Resultado: {resultado}")
+        words_to_check = ["aba", "ab", "abb", "aa", "c"]
+        results = process(automata, words_to_check)
+        for word, result in results.items():
+            print(f"Palavra: {word}, Resultado: {result}")
     except Exception as e:
         print(f"Erro: {e}")
